@@ -4,24 +4,25 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
-
-	"github.com/nikandfor/tlog"
 )
 
 type writer struct {
-	w    io.Writer
-	last byte
+	w     io.Writer
+	count int
+	last  byte
 }
 
-func (w *writer) Write(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
+func (w *writer) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
+
+	w.count += n
+	if n < len(p) {
+		w.last = p[n-1]
 	}
 
-	w.last = p[len(p)-1]
-
-	return w.w.Write(p)
+	return
 }
 
 func (w *writer) Newline() error {
@@ -33,6 +34,8 @@ func (w *writer) Newline() error {
 
 	return err
 }
+
+var force = flag.Bool("f", false, "force. add newline only on empty output")
 
 func main() {
 	flag.Parse()
@@ -54,13 +57,13 @@ func main() {
 			} else {
 				f, err := os.Open(a)
 				if err != nil {
-					tlog.Fatalf("open %q: %v", a, err)
+					log.Fatalf("open %q: %v", a, err)
 				}
 
 				defer func() {
 					err := f.Close()
 					if err != nil {
-						tlog.Fatalf("close %q: %v", a, err)
+						log.Fatalf("close %q: %v", a, err)
 					}
 				}()
 
@@ -69,13 +72,17 @@ func main() {
 
 			_, err := io.Copy(w, r)
 			if err != nil {
-				tlog.Fatalf("copy %q: %v", a, err)
+				log.Fatalf("copy %q: %v", a, err)
 			}
 		}()
 	}
 
+	if !*force && w.count == 0 {
+		return
+	}
+
 	err := w.Newline()
 	if err != nil {
-		tlog.Fatalf("add newline: %v", err)
+		log.Fatalf("add newline: %v", err)
 	}
 }
